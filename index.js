@@ -15,24 +15,19 @@ app.listen(PORT, () => {
   console.log(`Сервер слушает порт ${PORT}`);
 });
 
-let lastAlert = "";
+let sentIds = new Set();
 
 async function checkAlerts() {
   try {
-    const res = await fetch("https://www.oref.org.il/WarningMessages/Alert/alerts.json", {
+    const res = await fetch("https://api.tzevaadom.co.il/notifications", {
       headers: {
         "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json, text/plain, */*",
-        "Referer": "https://www.oref.org.il/"
+        "Accept": "application/json, text/plain, */*"
       }
     });
 
     const text = await res.text();
-    console.log("Ответ Oref:", text);
-
-    if (!text || text === lastAlert) return;
-
-    lastAlert = text;
+    console.log("Ответ TzevaAdom:", text);
 
     let data;
     try {
@@ -42,8 +37,25 @@ async function checkAlerts() {
       return;
     }
 
-    if (data.data && data.data.length > 0) {
-      const message = `🚨 ТРЕВОГА\n${data.data.join(", ")}`;
+    if (!Array.isArray(data) || data.length === 0) return;
+
+    for (const alert of data) {
+      const id = alert.notificationId || `${alert.time}-${(alert.cities || []).join(",")}`;
+
+      if (sentIds.has(id)) continue;
+      sentIds.add(id);
+
+      const cities = Array.isArray(alert.cities) ? alert.cities.join(", ") : "Без городов";
+      const threat = alert.threat;
+      const isDrill = alert.isDrill ? "Да" : "Нет";
+      const ts = alert.time ? new Date(alert.time * 1000).toLocaleString("ru-RU") : "Нет времени";
+
+      const message =
+`🚨 ТРЕВОГА
+Города: ${cities}
+Время: ${ts}
+Threat: ${threat}
+Учебная: ${isDrill}`;
 
       const tg = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
         method: "POST",
@@ -57,6 +69,11 @@ async function checkAlerts() {
       const tgText = await tg.text();
       console.log("Ответ Telegram:", tgText);
     }
+
+    if (sentIds.size > 500) {
+      sentIds = new Set(Array.from(sentIds).slice(-200));
+    }
+
   } catch (e) {
     console.log("Ошибка:", e.message);
   }
