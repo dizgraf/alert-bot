@@ -1,6 +1,6 @@
 const fetch = require("node-fetch");
 
-const TOKEN = "8635751892:AAE590fqPpviopRxjTtSt_q23V56gc92lVg";
+const TOKEN = "8635751892:AAFmbCJ41yLmXVX9CXut6F_L3SVyEAthUpc";
 const CHAT_ID = "951053167";
 
 let lastAlert = "";
