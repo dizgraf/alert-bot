@@ -15,10 +15,9 @@ app.listen(PORT, () => {
   console.log(`Сервер слушает порт ${PORT}`);
 });
 
-// =====================
-
 let lastAlertKey = "";
 let alertActive = false;
+let lastSeenAlertTime = 0;
 
 async function checkAlerts() {
   try {
@@ -29,33 +28,55 @@ async function checkAlerts() {
       }
     });
 
-    const data = await res.json();
+    const text = await res.text();
+    console.log("Ответ TzevaAdom:", text);
 
-    // 🚫 нет тревоги
-    if (!Array.isArray(data) || data.length === 0) {
-      if (alertActive) {
-        alertActive = false;
-
-        await sendMessage(`🟢 ИНЦИДЕНТ ЗАВЕРШЁН\nМожно выходить из укрытия`);
-      }
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.log("Это не JSON");
       return;
     }
 
-    // берем первое событие
+    // Если тревог нет
+    if (!Array.isArray(data) || data.length === 0) {
+      const now = Date.now();
+
+      // Завершение только если 10 минут не было новых тревог
+      if (alertActive && now - lastSeenAlertTime > 600000) {
+        alertActive = false;
+        lastAlertKey = "";
+
+        await sendMessage(
+          "🟢 ИНЦИДЕНТ ЗАВЕРШЁН\nПрошло 10 минут без новых тревог.\nМожно выходить из укрытия."
+        );
+      }
+
+      return;
+    }
+
+    // Берём первое событие
     const alert = data[0];
 
     const citiesArr = Array.isArray(alert.cities) ? alert.cities : [];
     const cities = citiesArr.join(", ");
 
-    const key = cities + alert.time;
+    const key = cities + "_" + alert.time;
 
-    // 🚫 защита от дублей
-    if (key === lastAlertKey) return;
+    // Защита от дублей
+    if (key === lastAlertKey) {
+      lastSeenAlertTime = Date.now();
+      return;
+    }
 
     lastAlertKey = key;
     alertActive = true;
+    lastSeenAlertTime = Date.now();
 
-    const time = new Date(alert.time * 1000).toLocaleTimeString("ru-RU");
+    const time = alert.time
+      ? new Date(alert.time * 1000).toLocaleTimeString("ru-RU")
+      : "Неизвестно";
 
     const message =
 `🚨 РАКЕТНАЯ ТРЕВОГА
@@ -72,23 +93,23 @@ async function checkAlerts() {
   }
 }
 
-// =====================
-
 async function sendMessage(text) {
-  const tg = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: CHAT_ID,
-      text: text
-    })
-  });
+  try {
+    const tg = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: CHAT_ID,
+        text: text
+      })
+    });
 
-  const result = await tg.text();
-  console.log("Telegram:", result);
+    const result = await tg.text();
+    console.log("Telegram:", result);
+  } catch (e) {
+    console.log("Ошибка Telegram:", e.message);
+  }
 }
-
-// =====================
 
 console.log("бот запущен");
 setInterval(checkAlerts, 10000);
