@@ -15,69 +15,80 @@ app.listen(PORT, () => {
   console.log(`Сервер слушает порт ${PORT}`);
 });
 
-let sentIds = new Set();
+// =====================
+
+let lastAlertKey = "";
+let alertActive = false;
 
 async function checkAlerts() {
   try {
     const res = await fetch("https://api.tzevaadom.co.il/notifications", {
       headers: {
         "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json, text/plain, */*"
+        "Accept": "application/json"
       }
     });
 
-    const text = await res.text();
-    console.log("Ответ TzevaAdom:", text);
+    const data = await res.json();
 
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      console.log("Это не JSON");
+    // 🚫 нет тревоги
+    if (!Array.isArray(data) || data.length === 0) {
+      if (alertActive) {
+        alertActive = false;
+
+        await sendMessage(`🟢 ИНЦИДЕНТ ЗАВЕРШЁН\nМожно выходить из укрытия`);
+      }
       return;
     }
 
-    if (!Array.isArray(data) || data.length === 0) return;
+    // берем первое событие
+    const alert = data[0];
 
-    for (const alert of data) {
-      const id = alert.notificationId || `${alert.time}-${(alert.cities || []).join(",")}`;
+    const citiesArr = Array.isArray(alert.cities) ? alert.cities : [];
+    const cities = citiesArr.join(", ");
 
-      if (sentIds.has(id)) continue;
-      sentIds.add(id);
+    const key = cities + alert.time;
 
-      const cities = Array.isArray(alert.cities) ? alert.cities.join(", ") : "Без городов";
-      const threat = alert.threat;
-      const isDrill = alert.isDrill ? "Да" : "Нет";
-      const ts = alert.time ? new Date(alert.time * 1000).toLocaleString("ru-RU") : "Нет времени";
+    // 🚫 защита от дублей
+    if (key === lastAlertKey) return;
 
-      const message =
-`🚨 ТРЕВОГА
-Города: ${cities}
-Время: ${ts}
-Threat: ${threat}
-Учебная: ${isDrill}`;
+    lastAlertKey = key;
+    alertActive = true;
 
-      const tg = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: CHAT_ID,
-          text: message
-        })
-      });
+    const time = new Date(alert.time * 1000).toLocaleTimeString("ru-RU");
 
-      const tgText = await tg.text();
-      console.log("Ответ Telegram:", tgText);
-    }
+    const message =
+`🚨 РАКЕТНАЯ ТРЕВОГА
 
-    if (sentIds.size > 500) {
-      sentIds = new Set(Array.from(sentIds).slice(-200));
-    }
+📍 ${cities || "Неизвестно"}
+⏱ ${time}
+
+⚠️ Немедленно в укрытие`;
+
+    await sendMessage(message);
 
   } catch (e) {
     console.log("Ошибка:", e.message);
   }
 }
+
+// =====================
+
+async function sendMessage(text) {
+  const tg = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: CHAT_ID,
+      text: text
+    })
+  });
+
+  const result = await tg.text();
+  console.log("Telegram:", result);
+}
+
+// =====================
 
 console.log("бот запущен");
 setInterval(checkAlerts, 10000);
