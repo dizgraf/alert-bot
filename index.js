@@ -11,44 +11,22 @@ app.get("/", (req, res) => {
   res.send("Bot is running");
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Сервер слушает порт ${PORT}`);
-});
 
-let lastAlert = "";
-
-async function checkAlerts() {
   try {
-    const res = await fetch("https://www.oref.org.il/WarningMessages/Alert/alerts.json");
-    const text = await res.text();
+    const response = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: CHAT_ID,
+        text: "ТЕСТ: бот запустился"
+      })
+    });
 
-    if (!text || text === lastAlert) return;
-
-    lastAlert = text;
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      return;
-    }
-
-    if (data.data && data.data.length > 0) {
-      const message = `🚨 ТРЕВОГА\n${data.data.join(", ")}`;
-
-      await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: CHAT_ID,
-          text: message
-        })
-      });
-    }
+    const result = await response.text();
+    console.log("Ответ Telegram:", result);
   } catch (e) {
-    console.log("Ошибка:", e.message);
+    console.log("Ошибка Telegram:", e.message);
   }
-}
-
-console.log("бот запущен");
-setInterval(checkAlerts, 3000);
+});
