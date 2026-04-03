@@ -29,13 +29,12 @@ async function checkAlerts() {
     });
 
     const text = await res.text();
-    console.log("Ответ TzevaAdom:", text);
 
     let data;
     try {
       data = JSON.parse(text);
     } catch {
-      console.log("Это не JSON");
+      console.log("Ответ TzevaAdom не JSON");
       return;
     }
 
@@ -62,7 +61,7 @@ async function checkAlerts() {
     const citiesArr = Array.isArray(alert.cities) ? alert.cities : [];
     const cities = citiesArr.join(", ");
 
-    const key = cities + "_" + alert.time;
+    const key = `${cities}_${alert.time}`;
 
     // Защита от дублей
     if (key === lastAlertKey) {
@@ -104,8 +103,13 @@ async function sendMessage(text) {
       })
     });
 
-    const result = await tg.text();
-    console.log("Telegram:", result);
+    const result = await tg.json();
+
+    if (result.ok) {
+      console.log("Сообщение отправлено:", text.replace(/\n/g, " | "));
+    } else {
+      console.log("Ошибка Telegram:", JSON.stringify(result));
+    }
   } catch (e) {
     console.log("Ошибка Telegram:", e.message);
   }
