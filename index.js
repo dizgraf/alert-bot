@@ -1,7 +1,7 @@
 const express = require("express");
 const fetch = require("node-fetch");
 
-const TOKEN = "ТВОЙ_НОВЫЙ_ТОКЕН";
+const TOKEN = "8635751892:AAFmbCJ41yLmXVX9CXut6F_L3SVyEAthUpc";
 const CHAT_ID = "951053167";
 
 const app = express();
